@@ -65,3 +65,13 @@ impl Config {
     }
 }
 
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn load_config() {
+        let config = Config::load();
+    }
+}
+
