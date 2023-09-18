@@ -2,6 +2,13 @@
 
 A TUI interface for ChatGPT.
 
+## To do
+
+- [ ] Parse JSON response
+- [ ] Scroll chat
+- [ ] Chat history
+- [ ] Multiple chats
+
 ## Features
 
 ## Installation
