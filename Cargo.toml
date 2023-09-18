@@ -1,0 +1,10 @@
+[package]
+name = "chatgptr"
+version = "0.1.0"
+edition = "2021"
+
+[dev-dependencies]
+bacon = "2.13.0"
+
+[dependencies]
+dirs = "5.0.1"
