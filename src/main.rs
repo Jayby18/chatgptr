@@ -1,37 +1,20 @@
-use std::{
-    fs::File,
-    io::{
-        self,
-        BufRead,
-        BufReader,
-        Read,
-    },
-    path::Path,
-    thread,
-    time::{Duration, Instant},
-    sync::mpsc,
-};
-use dirs;
-use reqwest::{
-    self,
-    header::*,
-};
-use serde_json::json;
+#![warn(clippy::unwrap_used)]
+
 use ratatui::{
-    backend::CrosstermBackend,
     widgets::*,
     layout::{Layout, Constraint, Direction},
     style::{Color, Style},
-    Terminal,
 };
 use crossterm::{
-    event::{self, DisableMouseCapture, EnableMouseCapture, Event as CEvent, KeyCode},
+    event::KeyCode,
     execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use serde_derive::Deserialize;
+use chatgpt::{
+    client::ChatGPT,
+    types::Role,
+};
 
-const REL_CONFIG_PATH: &str = ".config/chatgptr/chatgptr.conf";
+use chatgptr::io::config::Config;
 
 enum Event<I> {
     Input(I),
@@ -42,39 +25,13 @@ enum Event<I> {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = Config::load()?;
     let mut state = AppState::new();
-    let mut message: String = String::new();
+
+    let mut client = ChatGPT::new(config.token())?;
+    let mut conversation = client.new_conversation();
+    let mut conversation_index: usize = 0;
     
     // Set up terminal
-    enable_raw_mode()?;
-    let mut stdout = io::stdout();
-    execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
-    let backend = CrosstermBackend::new(stdout);
-    let mut terminal = Terminal::new(backend)?;
-    terminal.clear()?;
-
-    // User event handler
-    let (tx, rx) = mpsc::channel();
-    let tick_rate = Duration::from_millis(200);
-    thread::spawn(move | | {
-        let mut last_tick = Instant::now();
-        loop {
-            let timeout = tick_rate
-                .checked_sub(last_tick.elapsed())
-                .unwrap_or_else(| | Duration::from_secs(0));
-
-            if event::poll(timeout).expect("poll works") {
-                if let CEvent::Key(key) = event::read().expect("can read events") {
-                    tx.send(Event::Input(key)).expect("can send events");
-                }
-            }
-
-            if last_tick.elapsed() >= tick_rate {
-                if let Ok(_) = tx.send(Event::Tick) {
-                    last_tick = Instant::now();
-                }
-            }
-        }
-    });
+    let (mut terminal, rx) = stdr::setup_terminal!();
 
     // Render loop
     loop {
@@ -100,10 +57,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 ])
                 .split(size);
 
-            if !message.is_empty() {
-                let gpt_response: GPTResponse = serde_json::from_str(message.as_str()).unwrap();
+            if !&conversation.history.is_empty() {
+                // let gpt_response: GPTResponse = serde_json::from_str(message.as_str()).unwrap();
+                // TODO: get response
 
-                let chat_box = Paragraph::new(gpt_response.content)
+                let chat_box = Paragraph::new(conversation.history.iter().filter(|m| m.role == Role::Assistant).skip(conversation_index).next().unwrap().content.clone())
                     .wrap(Wrap { trim: true })
                     .block(
                         Block::default()
@@ -175,6 +133,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         },
                         KeyCode::Char('i') => {
                             state.mode = EditingMode::Input;
+                        },
+                        KeyCode::Char('u') => {
+                            conversation.rollback();
                         }
                         _ => {},
                     },
@@ -195,7 +156,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         },
                         KeyCode::Enter => {
                             state.mode = EditingMode::Browse;
-                            message = send_message(&state.user_text, &config.token).await?;
+                            conversation.send_message(state.user_text.clone()).await?;
                             state.user_text.clear();
                         }
                         _ => {},
@@ -207,112 +168,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // Restore terminal
-    disable_raw_mode()?;
-    execute!(terminal.backend_mut(), LeaveAlternateScreen, DisableMouseCapture)?;
-    terminal.show_cursor()?;
-
-    // let mut message: String = String::new();
-    // println!("\n Message:");
-    // io::stdin().read_line(&mut message).expect("failed to readline");
-
-    
+    stdr::restore_terminal!(terminal);
 
     Ok(())
-}
-
-async fn send_message(content: &String, token: &String) -> Result<String, Box<dyn std::error::Error>> {
-    let payload = json!({
-        "model": "gpt-3.5-turbo",
-        "messages": [{
-            "role": "user",
-            "content": content,
-        }],
-        "temperature" : 0.7,
-    });
-
-    println!("Content: {}", content);
-
-    let client = reqwest::Client::new();
-    let response = client
-        .post("https://api.openai.com/v1/chat/completions")
-        .header(CONTENT_TYPE, "application/json")
-        .header(AUTHORIZATION, format!("Bearer {}", token))
-        .body(payload.to_string())
-        .send()
-        .await?
-        .text()
-        .await?;
-
-    Ok(String::from(response.as_str()))
-}
-
-enum GPTModel {
-    V3_5,
-    V4,
-}
-
-struct Config {
-    token: String,
-    model: GPTModel,
-}
-
-impl Config {
-    fn new() -> Config {
-        Config {
-            token: String::new(),
-            model: GPTModel::V3_5,
-        }
-    }
-
-    fn load() -> Result<Config, io::Error> {
-        let path = dirs::home_dir().unwrap().join(Path::new(REL_CONFIG_PATH));
-
-        if let Ok(file) = File::open(path) {
-            let mut config = Config::new();
-
-            // let token_reader = BufReader::new(&file);
-
-            // let test_token = token_reader
-            //     .lines()
-            //     .find(|line| {
-            //         line
-            //             .as_ref()
-            //             .unwrap()
-            //             .starts_with("token=")
-            //     })
-            //     .unwrap()?
-            //     .split("=")
-            //     .map(String::from)
-            //     .skip(1)
-            //     .next()
-            //     .unwrap();
-
-            let reader = BufReader::new(file);
-            reader
-                .lines()
-                .filter_map(|line| line.ok())
-                .filter(|line| line.contains("="))
-                .for_each(|line| {
-                    let key = line.split("=").next().unwrap();
-                    let value = line.split("=").skip(1).next().map(String::from).unwrap();
-                    match key {
-                        "token" => config.token = value,
-                        "model" => config.model = match value.as_str() {
-                            "gpt-3.5-turbo" => GPTModel::V3_5,
-                            "gpt-4" => GPTModel::V4,
-                            _ => GPTModel::V3_5,
-                        },
-                        _ => {}
-                    }
-                });
-
-            Ok(config)
-        } else {
-            // file doesn't exist yet
-            // TODO: prompt to create new config
-            panic!("Config file not found!");
-        }
-    }
 }
 
 #[derive(PartialEq)]
@@ -334,19 +192,3 @@ impl AppState {
         }
     }
 }
-
-#[derive(Deserialize)]
-struct GPTResponse {
-    content: String,
-}
-
-#[cfg(test)]
-mod test {
-    use super::*;
-
-    #[test]
-    fn load_config() {
-        let config = Config::load();
-    }
-}
-
