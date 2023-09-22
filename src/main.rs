@@ -14,21 +14,25 @@ use chatgpt::{
     types::Role,
 };
 
-use chatgptr::io::config::Config;
+mod io;
+use io::config::Config;
+
+mod app;
+use app::{AppState, EditingMode};
 
 enum Event<I> {
     Input(I),
     Tick,
 }
 
-#[tokio::main]
+#[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = Config::load()?;
     let mut state = AppState::new();
 
-    let mut client = ChatGPT::new(config.token())?;
+    let client = ChatGPT::new(config.token())?;
     let mut conversation = client.new_conversation();
-    let mut conversation_index: usize = 0;
+    let mut msg_index: usize = 0;
     
     // Set up terminal
     let (mut terminal, rx) = stdr::setup_terminal!();
@@ -37,17 +41,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     loop {
         // Draw terminal
         terminal.draw(|f| {
-            // Set size
+            // Layout
             let size = f.size();
-            let display_width;
-            if (size.width / 2) % 2 == 0 {
-                display_width = size.width / 2;
-            } else {
-                display_width = (size.width / 2) - 1;
-            }
-            let display_height = display_width / 256 * 240;
-
-            // Divide screen into two halves, horizontally
             let layout = Layout::default()
                 .direction(Direction::Vertical)
                 .constraints([
@@ -57,31 +52,51 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 ])
                 .split(size);
 
-            if !&conversation.history.is_empty() {
-                // let gpt_response: GPTResponse = serde_json::from_str(message.as_str()).unwrap();
-                // TODO: get response
+            // if conversation.history.len() > 0 {
+            //     let chat_box = Paragraph::new(
+            //         conversation
+            //             .history
+            //             .iter()
+            //             // .filter(|m| m.role == Role::Assistant)
+            //             .nth(msg_index)
+            //             .expect("no chat message")
+            //             .content
+            //             .clone())
+            //         .wrap(Wrap { trim: true })
+            //         .block(
+            //             Block::default()
+            //                 .borders(Borders::ALL)
+            //                 .title("ChatGPT")
+            //         );
+            //     f.render_widget(chat_box, layout[0]);
+            // } else {
+            //     let chat_box = Paragraph::new("")
+            //         .wrap(Wrap { trim: true })
+            //         .block(
+            //             Block::default()
+            //                 .borders(Borders::ALL)
+            //                 .title("ChatGPT")
+            //         );
+            //     f.render_widget(chat_box, layout[0]);
+            // }
 
-                let chat_box = Paragraph::new(conversation.history.iter().filter(|m| m.role == Role::Assistant).skip(conversation_index).next().unwrap().content.clone())
-                    .wrap(Wrap { trim: true })
-                    .block(
-                        Block::default()
-                            .borders(Borders::ALL)
-                            .title("ChatGPT")
-                    );
-                f.render_widget(chat_box, layout[0]);
-            } else {
-                let chat_box = Paragraph::new("")
-                    .wrap(Wrap { trim: true })
-                    .block(
-                        Block::default()
-                            .borders(Borders::ALL)
-                            .title("ChatGPT")
-                    );
-                f.render_widget(chat_box, layout[0]);
-            }
+            // TODO: wrap text
+            // TODO: add divider between messages
+            let msg_list = List::new(
+                    conversation.history
+                    .iter()
+                    .map(|msg| ListItem::new(msg.content.clone()))
+                    .collect::<Vec<ListItem>>())
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .title("ChatGPT")
+                );
+            f.render_widget(msg_list, layout[0]);
 
-            if state.mode == EditingMode::Input {
-                let text_box = Paragraph::new(state.user_text.clone())
+            // Update user input box
+            if state.mode() == EditingMode::Insert {
+                let text_box = Paragraph::new(state.user_text().clone())
                     .wrap(Wrap { trim: true })
                     .style(
                         Style::default()
@@ -102,8 +117,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             .title("Help")
                     );
                 f.render_widget(help, layout[2]);
-            } else if state.mode == EditingMode::Browse {
-                let text_box = Paragraph::new(state.user_text.clone())
+            } else if state.mode() == EditingMode::Normal {
+                let text_box = Paragraph::new(state.user_text().clone())
                     .wrap(Wrap { trim: true })
                     .block(
                         Block::default()
@@ -123,41 +138,48 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         })?;
 
-        // Handle user event
-        match state.mode {
-            EditingMode::Browse => {
-                match rx.recv().unwrap() {
+        // Handle user event, depending on current editing mode
+        match state.mode() {
+            EditingMode::Normal => {
+                match rx.recv().expect("recv error") {
                     Event::Input(event) => match event.code {
                         KeyCode::Char('q') => {
                             break;
                         },
                         KeyCode::Char('i') => {
-                            state.mode = EditingMode::Input;
+                            state.switch_mode(EditingMode::Insert);
                         },
                         KeyCode::Char('u') => {
                             conversation.rollback();
-                        }
+                        },
+                        KeyCode::Char('j') => {
+                            if conversation.history.len() > msg_index + 1 { msg_index += 1; }
+                        },
+                        KeyCode::Char('k') => {
+                            if msg_index != 0 { msg_index -= 1; }
+                        },
                         _ => {},
                     },
                     Event::Tick => {},
                 }
             },
-            EditingMode::Input => {
-                match rx.recv().unwrap() {
+            EditingMode::Insert => {
+                match rx.recv().expect("recv error") {
                     Event::Input(event) => match event.code {
                         KeyCode::Char(c) => {
-                            state.user_text.push(c);
+                            state.push_user_text(c);
                         },
                         KeyCode::Backspace => {
-                            state.user_text.pop();
+                            state.pop_user_text();
                         },
                         KeyCode::Esc => {
-                            state.mode = EditingMode::Browse;
+                            state.switch_mode(EditingMode::Normal);
                         },
                         KeyCode::Enter => {
-                            state.mode = EditingMode::Browse;
-                            conversation.send_message(state.user_text.clone()).await?;
-                            state.user_text.clear();
+                            state.switch_mode(EditingMode::Normal);
+                            conversation.send_message(state.user_text()).await?;
+                            msg_index += 2;
+                            state.clear_user_text();
                         }
                         _ => {},
                     },
@@ -171,24 +193,4 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     stdr::restore_terminal!(terminal);
 
     Ok(())
-}
-
-#[derive(PartialEq)]
-enum EditingMode {
-    Input,
-    Browse,
-}
-
-struct AppState {
-    mode: EditingMode,
-    user_text: String,
-}
-
-impl AppState {
-    fn new() -> AppState {
-        AppState {
-            mode: EditingMode::Browse,
-            user_text: String::new(),
-        }
-    }
 }

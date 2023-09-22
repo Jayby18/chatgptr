@@ -4,7 +4,7 @@ A TUI interface for ChatGPT.
 
 ## To do
 
-- [ ] Parse JSON response
+- [ ] Use `toml` crate for config
 - [ ] Scroll chat
 - [ ] Chat history
 - [ ] Multiple chats

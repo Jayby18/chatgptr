@@ -1,7 +1,13 @@
 [package]
 name = "chatgptr"
-version = "0.1.0"
+version = "0.1.0-alpha"
 edition = "2021"
+authors = ["Jaden Accord <dev@jadenaccord.com>"]
+readme = "README.md"
+repository = "https://github.com/Jayby18/chatgptr"
+keywords = ["tui", "chatgpt"]
+categories = []
+exclude = []
 
 [dependencies]
 chatgpt_rs = "1.2.3"
