@@ -1,35 +1,58 @@
+/// Editing editing_modes
+#[derive(Clone, Copy, Default, PartialEq)]
+pub enum EditingMode {
+    #[default] Normal,
+    Insert,
+    Visual,
+}
+
+/// App state
+#[derive(Default)]
 pub struct AppState {
-    mode: EditingMode,
-    user_text: String,
+    editing_mode: EditingMode,
+    input_text: String,
+    cursor_position: usize,
 }
 
 impl AppState {
     pub fn new() -> Self {
         AppState {
-            mode: EditingMode::Normal,
-            user_text: String::new(),
+            editing_mode: EditingMode::Normal,
+            input_text: String::new(),
+            cursor_position: 0,
         }
     }
 
-    pub fn mode(&self) -> EditingMode { self.mode }
-    pub fn user_text(&self) -> String { self.user_text.clone() }
+    // Get and switch editing editing_modes
+    pub fn editing_mode(&self) -> EditingMode { self.editing_mode }
+    pub fn switch_editing_mode(&mut self, editing_mode: EditingMode) { self.editing_mode = editing_mode; }
 
-    pub fn switch_mode(&mut self, mode: EditingMode) { self.mode = mode; }
+    // Get and change user text
+    pub fn input_text(&self) -> String { self.input_text.clone() }
+    pub fn set_input_text(&mut self, text: String) { self.input_text = text; }
+    pub fn push_input_text(&mut self, c: char) { self.input_text.push(c); }
+    pub fn pop_input_text(&mut self) { self.input_text.pop(); }
+    pub fn clear_input_text(&mut self) { self.input_text = String::new(); }
 
-    // pub fn set_user_text(&mut self, text: String) { self.user_text = text; }
-    pub fn push_user_text(&mut self, c: char) { self.user_text.push(c); }
-    pub fn pop_user_text(&mut self) { self.user_text.pop(); }
-    pub fn clear_user_text(&mut self) { self.user_text = String::new(); }
-}
+    // Example
+    // input_text = Hello
+    //              01234
+    // length is 5
+    // if cursor is at 0, we want to loop around position 4 again
 
-impl Default for AppState {
-    fn default() -> Self {
-        Self::new()
+    // Navigate cursor
+    pub fn move_cursor_left(&mut self) {
+        if self.cursor_position <= 0 {
+            self.cursor_position = self.input_text.len() - 1;
+        } else {
+            self.cursor_position -= 1;
+        }
     }
-}
-
-#[derive(PartialEq, Clone, Copy)]
-pub enum EditingMode {
-    Normal,
-    Insert,
+    pub fn move_cursor_right(&mut self) {
+        if self.cursor_position >= (self.input_text.len() - 1) {
+            self.cursor_position = 0;
+        } else {
+            self.cursor_position += 1;
+        }
+    }
 }

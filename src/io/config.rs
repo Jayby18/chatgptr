@@ -11,9 +11,9 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn new() -> Self {
+    pub fn new(token: String) -> Self {
         Config {
-            token: String::new(),
+            token,
         }
     }
 
@@ -21,7 +21,7 @@ impl Config {
         let path = dirs::home_dir().expect("no home dir").join(Path::new(REL_CONFIG_PATH));
 
         if let Ok(file) = File::open(path) {
-            let mut config = Config::new();
+            let mut config = Config::default();
 
             let reader = BufReader::new(file);
             reader
@@ -55,6 +55,8 @@ impl Config {
 
 impl Default for Config {
     fn default() -> Self {
-        Self::new()
+        Config {
+            token: String::new(),
+        }
     }
 }

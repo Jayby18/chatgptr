@@ -9,10 +9,6 @@ use crossterm::{
     event::KeyCode,
     execute,
 };
-use chatgpt::{
-    client::ChatGPT,
-    types::Role,
-};
 
 mod io;
 use io::config::Config;
@@ -25,14 +21,9 @@ enum Event<I> {
     Tick,
 }
 
-#[tokio::main(flavor = "current_thread")]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let config = Config::load()?;
-    let mut state = AppState::new();
-
-    let client = ChatGPT::new(config.token())?;
-    let mut conversation = client.new_conversation();
-    let mut msg_index: usize = 0;
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let config: Config = Config::load()?;
+    let mut state: AppState = AppState::default();
     
     // Set up terminal
     let (mut terminal, rx) = stdr::setup_terminal!();
@@ -52,51 +43,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 ])
                 .split(size);
 
-            // if conversation.history.len() > 0 {
-            //     let chat_box = Paragraph::new(
-            //         conversation
-            //             .history
-            //             .iter()
-            //             // .filter(|m| m.role == Role::Assistant)
-            //             .nth(msg_index)
-            //             .expect("no chat message")
-            //             .content
-            //             .clone())
-            //         .wrap(Wrap { trim: true })
-            //         .block(
-            //             Block::default()
-            //                 .borders(Borders::ALL)
-            //                 .title("ChatGPT")
-            //         );
-            //     f.render_widget(chat_box, layout[0]);
-            // } else {
-            //     let chat_box = Paragraph::new("")
-            //         .wrap(Wrap { trim: true })
-            //         .block(
-            //             Block::default()
-            //                 .borders(Borders::ALL)
-            //                 .title("ChatGPT")
-            //         );
-            //     f.render_widget(chat_box, layout[0]);
-            // }
-
-            // TODO: wrap text
-            // TODO: add divider between messages
-            let msg_list = List::new(
-                    conversation.history
-                    .iter()
-                    .map(|msg| ListItem::new(msg.content.clone()))
-                    .collect::<Vec<ListItem>>())
-                .block(
-                    Block::default()
-                        .borders(Borders::ALL)
-                        .title("ChatGPT")
-                );
-            f.render_widget(msg_list, layout[0]);
-
-            // Update user input box
-            if state.mode() == EditingMode::Insert {
-                let text_box = Paragraph::new(state.user_text().clone())
+            // Update input box
+            if state.editing_mode() == EditingMode::Insert {
+                let text_box = Paragraph::new(state.input_text().clone())
                     .wrap(Wrap { trim: true })
                     .style(
                         Style::default()
@@ -110,15 +59,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 f.render_widget(text_box, layout[1]);
 
                 // Help
-                let help = Paragraph::new("<esc: exit insert mode> <enter: send message>")
+                let help = Paragraph::new("<esc: exit insert editing_mode> <enter: send message>")
                     .block(
                         Block::default()
                             .borders(Borders::ALL)
                             .title("Help")
                     );
                 f.render_widget(help, layout[2]);
-            } else if state.mode() == EditingMode::Normal {
-                let text_box = Paragraph::new(state.user_text().clone())
+            } else if state.editing_mode() == EditingMode::Normal {
+                let text_box = Paragraph::new(state.input_text().clone())
                     .wrap(Wrap { trim: true })
                     .block(
                         Block::default()
@@ -128,7 +77,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 f.render_widget(text_box, layout[1]);
 
                 // Help
-                let help = Paragraph::new("<q: quit> <i: insert mode>")
+                let help = Paragraph::new("<q: quit> <i: insert editing_mode>")
                     .block(
                         Block::default()
                             .borders(Borders::ALL)
@@ -138,25 +87,39 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         })?;
 
-        // Handle user event, depending on current editing mode
-        match state.mode() {
+        // Handle user event, depending on current editing editing_mode
+        match state.editing_mode() {
             EditingMode::Normal => {
                 match rx.recv().expect("recv error") {
                     Event::Input(event) => match event.code {
+                        // Quit application
                         KeyCode::Char('q') => {
                             break;
                         },
+                        // Switch editing modes
                         KeyCode::Char('i') => {
-                            state.switch_mode(EditingMode::Insert);
+                            state.switch_editing_mode(EditingMode::Insert);
                         },
+                        KeyCode::Char('v') => {
+                            state.switch_editing_mode(EditingMode::Visual);
+                        },
+                        // TODO: Undo
                         KeyCode::Char('u') => {
-                            conversation.rollback();
                         },
+                        // TODO: Remove character under cursor
+                        KeyCode::Char('x') => {
+                        },
+                        // TODO: Navigate up/down through history
                         KeyCode::Char('j') => {
-                            if conversation.history.len() > msg_index + 1 { msg_index += 1; }
                         },
                         KeyCode::Char('k') => {
-                            if msg_index != 0 { msg_index -= 1; }
+                        },
+                        // Navigate cursor left/right
+                        KeyCode::Char('h') => {
+                            state.move_cursor_left();
+                        },
+                        KeyCode::Char('l') => {
+                            state.move_cursor_right();
                         },
                         _ => {},
                     },
@@ -166,26 +129,38 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             EditingMode::Insert => {
                 match rx.recv().expect("recv error") {
                     Event::Input(event) => match event.code {
+                        // Insert letter
                         KeyCode::Char(c) => {
-                            state.push_user_text(c);
+                            state.push_input_text(c);
                         },
+                        // TODO: Remove letter before cursor
                         KeyCode::Backspace => {
-                            state.pop_user_text();
                         },
+                        // TODO: Remove letter under cursor
+                        KeyCode::Delete => {}
+                        // Escape back to normal mode
                         KeyCode::Esc => {
-                            state.switch_mode(EditingMode::Normal);
+                            state.switch_editing_mode(EditingMode::Normal);
                         },
+                        // TODO: Send message
                         KeyCode::Enter => {
-                            state.switch_mode(EditingMode::Normal);
-                            conversation.send_message(state.user_text()).await?;
-                            msg_index += 2;
-                            state.clear_user_text();
                         }
                         _ => {},
                     },
                     Event::Tick => {},
                 }
-            }
+            },
+            EditingMode::Visual => {
+                match rx.recv().expect("recv error") {
+                    Event::Input(event) => match event.code {
+                        KeyCode::Esc => {
+                            state.switch_editing_mode(EditingMode::Normal);
+                        },
+                        _ => {},
+                    },
+                    Event::Tick => {},
+                }
+            },
         }
     }
 
