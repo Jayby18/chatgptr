@@ -85,19 +85,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         terminal.draw(|f| {
             // Layout
             let size = f.size();
+            let inner_width = f.size().width - 2;
+            let input_box_height = app_state.input_text().len() as u16 / inner_width + 3;
             let layout = Layout::default()
                 .direction(Direction::Vertical)
                 .constraints([
                     Constraint::Min(20),
-                    Constraint::Min(5),
+                    Constraint::Length(input_box_height),
                     Constraint::Length(3),
                 ])
                 .split(size);
 
             // Set cursor to correct position
-            let input_box_width = f.size().width - 2;
-            let cursor_line = app_state.cursor_position() / input_box_width;
-            let cursor_column = app_state.cursor_position() % input_box_width;
+            let cursor_line = app_state.cursor_position() / inner_width;
+            let cursor_column = app_state.cursor_position() % inner_width;
             f.set_cursor(cursor_column + 1, layout[1].y + 1 + cursor_line);
 
             // Display message history
@@ -121,7 +122,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 EditingMode::Normal => {
                     let lines: Vec<Line> = app_state.input_text().chars()
                         .collect::<Vec<char>>()
-                        .chunks(input_box_width as usize)
+                        .chunks(inner_width as usize)
                         .map(|chunk| Line::from(chunk.iter().collect::<String>()))
                         .collect();
 
@@ -138,7 +139,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 EditingMode::Insert => {
                     let lines: Vec<Line> = app_state.input_text().chars()
                         .collect::<Vec<char>>()
-                        .chunks(input_box_width as usize)
+                        .chunks(inner_width as usize)
                         .map(|chunk| Line::from(chunk.iter().collect::<String>()))
                         .collect();
 
