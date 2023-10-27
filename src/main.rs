@@ -8,15 +8,18 @@ use std::{
 use ratatui::{
     widgets::*,
     layout::{Layout, Constraint, Direction},
-    style::{Color, Style},
+    style::{Color, Style, Modifier},
     backend::CrosstermBackend,
     Terminal,
+    text::Line,
 };
 use crossterm::{
     event::{self, Event as CEvent, KeyCode},
     terminal::{enable_raw_mode, disable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
     execute,
 };
+use chatgpt::prelude::{ ChatGPT, ChatMessage, Conversation };
+use chatgpt::types::Role;
 
 mod app;
 use app::{AppState, EditingMode};
@@ -71,6 +74,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
+    // FOR TESTING PURPOSES
+    let client: ChatGPT = ChatGPT::new(String::from("apikey"))?;
+    let history: Vec<ChatMessage> = vec![ChatMessage{role: Role::User, content: String::from("What is Rust?")}, ChatMessage{role: Role::Assistant, content: String::from("Rust is a programming language")}];
+    let conversation: Conversation = Conversation::new_with_history(client, history);
+
     // Render loop
     loop {
         // Draw terminal
@@ -87,16 +95,37 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .split(size);
 
             // Set cursor to correct position
-            // TODO: how to deal with text wrapping?
             let input_box_width = f.size().width - 2;
             let cursor_line = app_state.cursor_position() / input_box_width;
             let cursor_column = app_state.cursor_position() % input_box_width;
             f.set_cursor(cursor_column + 1, layout[1].y + 1 + cursor_line);
 
+            // Display message history
+            // TODO: make user messages italic and assistant messages regular
+            let messages: Vec<ListItem> = app_state.history().iter()
+                .map(|msg| {
+                    ListItem::new(msg.as_str())
+                })
+                .collect();
+            let history_box = List::new(messages)
+                .block(Block::default().title("History").borders(Borders::ALL))
+                .style(Style::default().fg(Color::White))
+                .highlight_style(Style::default().add_modifier(Modifier::ITALIC))
+                .highlight_symbol("> ");
+            let mut history_state = ListState::default();
+            history_state.select(app_state.selected_message());
+            f.render_stateful_widget(history_box, layout[0], &mut history_state);
+
             // Input and help box, depending on editing mode
             match app_state.editing_mode() {
                 EditingMode::Normal => {
-                    let input_box = Paragraph::new(app_state.input_text())
+                    let lines: Vec<Line> = app_state.input_text().chars()
+                        .collect::<Vec<char>>()
+                        .chunks(input_box_width as usize)
+                        .map(|chunk| Line::from(chunk.iter().collect::<String>()))
+                        .collect();
+
+                    let input_box = Paragraph::new(lines)
                         .wrap(Wrap{ trim: false })
                         .style(Style::default())
                         .block(Block::default().borders(Borders::ALL).title("Input"));
@@ -107,7 +136,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     f.render_widget(help_box, layout[2]);
                 },
                 EditingMode::Insert => {
-                    let input_box = Paragraph::new(app_state.input_text())
+                    let lines: Vec<Line> = app_state.input_text().chars()
+                        .collect::<Vec<char>>()
+                        .chunks(input_box_width as usize)
+                        .map(|chunk| Line::from(chunk.iter().collect::<String>()))
+                        .collect();
+
+                    let input_box = Paragraph::new(lines)
                         .wrap(Wrap{ trim: false })
                         .style(Style::default().fg(Color::Red))
                         .block(Block::default().borders(Borders::ALL).title("Input"));
@@ -137,14 +172,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         KeyCode::Char('v') => {
                             app_state.switch_editing_mode(EditingMode::Visual);
                         },
+                        // Append with 'a'
                         // Remove character under cursor
                         KeyCode::Char('x') => {
                             app_state.remove_char();
                         },
-                        // TODO: Navigate up/down through history
+                        // Navigate up/down through history
                         KeyCode::Char('j') => {
+                            app_state.select_next_msg();
                         },
                         KeyCode::Char('k') => {
+                            app_state.select_prev_msg();
                         },
                         // Navigate cursor left/right
                         KeyCode::Char('h') => {
@@ -152,6 +190,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         },
                         KeyCode::Char('l') => {
                             app_state.move_cursor_right();
+                        },
+                        // Yank selected message
+                        KeyCode::Char('y') => {
+                            app_state.yank_selected();
+                        },
+                        // Paste buffer into input box, and switch editing mode
+                        KeyCode::Char('p') => {
+                            app_state.paste_buffer();
+                            // app_state.switch_editing_mode(EditingMode::Insert);
+                        },
+                        // TODO: Rollback history
+                        KeyCode::Char('u') => {},
+                        // Deselect message
+                        KeyCode::Esc => {
+                            app_state.clear_msg_selection();
                         },
                         _ => {},
                     },
@@ -184,17 +237,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     Event::Tick => {},
                 }
             },
-            EditingMode::Visual => {
-                match rx.recv().expect("recv error") {
-                    Event::Input(event) => match event.code {
-                        KeyCode::Esc => {
-                            app_state.switch_editing_mode(EditingMode::Normal);
-                        },
-                        _ => {},
-                    },
-                    Event::Tick => {},
-                }
-            },
+            _ => {},
         }
     }
 
