@@ -83,16 +83,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     loop {
         // Draw terminal
         terminal.draw(|f| {
-            // Layout
+            // Sizes
+            // FIXME: program panics when sizes don't fit
             let size = f.size();
-            let inner_width = f.size().width - 2;
-            let input_box_height = app_state.input_text().len() as u16 / inner_width + 3;
+            let inner_width: u16 = f.size().width - 2;
+            let input_box_height: u16 = app_state.input_text().len() as u16 / inner_width + 3;
+            let help_box_height: u16 = 3;
+            let history_box_height: u16 = f.size().height - input_box_height - help_box_height;
+
+            // Layout
             let layout = Layout::default()
                 .direction(Direction::Vertical)
                 .constraints([
-                    Constraint::Min(20),
+                    Constraint::Length(history_box_height),
                     Constraint::Length(input_box_height),
-                    Constraint::Length(3),
+                    Constraint::Length(help_box_height),
                 ])
                 .split(size);
 
@@ -103,6 +108,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             // Display message history
             // TODO: make user messages italic and assistant messages regular
+            // FIXME: wrap messages
             let messages: Vec<ListItem> = app_state.history().iter()
                 .map(|msg| {
                     ListItem::new(msg.as_str())
@@ -113,6 +119,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .style(Style::default().fg(Color::White))
                 .highlight_style(Style::default().add_modifier(Modifier::ITALIC))
                 .highlight_symbol("> ");
+            // TODO: keep history_state in app_state?
             let mut history_state = ListState::default();
             history_state.select(app_state.selected_message());
             f.render_stateful_widget(history_box, layout[0], &mut history_state);
@@ -219,7 +226,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         KeyCode::Char(c) => {
                             app_state.insert_char(c);
                         },
-                        // TODO: Remove letter before cursor
+                        // Remove letter before cursor
                         KeyCode::Backspace => {
                             app_state.backspace();
                         },
