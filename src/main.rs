@@ -23,6 +23,8 @@ use chatgpt::types::Role;
 
 mod app;
 use app::{AppState, EditingMode};
+mod io;
+use io::config::Config;
 
 enum Event<I> {
     Input(I),
@@ -30,7 +32,7 @@ enum Event<I> {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // let config: Config = Config::load()?;
+    let config: Config = Config::load();
     let mut app_state: AppState = AppState::new();
     
     // Set up terminal
@@ -75,7 +77,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     // FOR TESTING PURPOSES
-    let client: ChatGPT = ChatGPT::new(String::from("apikey"))?;
+    let client: ChatGPT = ChatGPT::new(config.api_key().unwrap())?;
     let history: Vec<ChatMessage> = vec![ChatMessage{role: Role::User, content: String::from("What is Rust?")}, ChatMessage{role: Role::Assistant, content: String::from("Rust is a programming language")}];
     let conversation: Conversation = Conversation::new_with_history(client, history);
 
