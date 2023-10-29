@@ -218,6 +218,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         },
                         // TODO: Send message
                         KeyCode::Enter => {
+                            // TODO: queue up the API call to happen on next frame draw, otherwise cannot show loading icon
+                            // Generally, how do I properly use async/await? Right now, I'm just blocking the main thread anyway
+                            app_state.append_history(String::from(app_state.input_text()));
+                            app_state.clear_input_text();
                             let response = conversation.send_message(app_state.input_text()).await.expect("ChatGPT error");
                             app_state.append_history(response.message().content.clone());
                         }
@@ -246,6 +250,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         },
                         // TODO: Send message
                         KeyCode::Enter => {
+                            app_state.switch_editing_mode(EditingMode::Normal);
+                            app_state.append_history(String::from(app_state.input_text()));
+                            app_state.clear_input_text();
                             let response = conversation.send_message(app_state.input_text()).await.expect("ChatGPT error");
                             app_state.append_history(response.message().content.clone());
                         }
