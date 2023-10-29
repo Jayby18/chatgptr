@@ -31,7 +31,8 @@ enum Event<I> {
     Tick,
 }
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config: Config = Config::load();
     let mut app_state: AppState = AppState::new();
     
@@ -78,8 +79,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // FOR TESTING PURPOSES
     let client: ChatGPT = ChatGPT::new(config.api_key().unwrap())?;
-    let history: Vec<ChatMessage> = vec![ChatMessage{role: Role::User, content: String::from("What is Rust?")}, ChatMessage{role: Role::Assistant, content: String::from("Rust is a programming language")}];
-    let conversation: Conversation = Conversation::new_with_history(client, history);
+    let mut conversation: Conversation = Conversation::new_with_history(client, vec![]);
 
     // Render loop
     loop {
@@ -216,6 +216,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         KeyCode::Esc => {
                             app_state.clear_msg_selection();
                         },
+                        // TODO: Send message
+                        KeyCode::Enter => {
+                            let response = conversation.send_message(app_state.input_text()).await.expect("ChatGPT error");
+                            app_state.append_history(response.message().content.clone());
+                        }
                         _ => {},
                     },
                     Event::Tick => {},
@@ -241,6 +246,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         },
                         // TODO: Send message
                         KeyCode::Enter => {
+                            let response = conversation.send_message(app_state.input_text()).await.expect("ChatGPT error");
+                            app_state.append_history(response.message().content.clone());
                         }
                         _ => {},
                     },

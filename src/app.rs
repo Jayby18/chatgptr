@@ -86,6 +86,9 @@ impl AppState {
     }
 
     pub fn history(&self) -> &Vec<String> { &self.history }
+    pub fn append_history(&mut self, message: String) {
+        self.history.push(message);
+    }
 
     // Selected message
     pub fn selected_message(&self) -> Option<usize> { self.selected_message }
