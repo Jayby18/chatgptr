@@ -50,6 +50,7 @@ impl AppState {
     }
     pub fn set_input_text(&mut self, text: &str) { self.input_text = String::from(text); }
     pub fn clear_input_text(&mut self) { self.input_text = String::new(); }
+    // FIXME: move cursor back after clearing input_text
 
     // Get cursor position
     pub fn cursor_position(&self) -> u16 { self.cursor_position }
