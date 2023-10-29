@@ -23,8 +23,7 @@ impl AppState {
             editing_mode: EditingMode::Normal,
             input_text: String::new(),
             cursor_position: 0,
-            // TODO: set history back to empty vec
-            history: vec![String::from("What is Rust?"), String::from("A blazingly fast programming language!"), String::from("Qui consequat deserunt sint. Velit excepteur Lorem ut excepteur ad labore voluptate.")],
+            history: vec![],
             selected_message: None,
             yank_buffer: String::new(),
         }
