@@ -8,7 +8,7 @@ use std::{
 use ratatui::{
     widgets::*,
     layout::{Layout, Constraint, Direction},
-    style::{Color, Style, Modifier},
+    style::{Color, Style},
     backend::CrosstermBackend,
     Terminal,
     text::Line,
@@ -18,8 +18,7 @@ use crossterm::{
     terminal::{enable_raw_mode, disable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
     execute,
 };
-use chatgpt::prelude::{ ChatGPT, ChatMessage, Conversation };
-use chatgpt::types::Role;
+use chatgpt::prelude::{ ChatGPT, Conversation };
 
 mod app;
 use app::{AppState, EditingMode};
@@ -78,7 +77,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     // FOR TESTING PURPOSES
-    let client: ChatGPT = ChatGPT::new(config.api_key().unwrap())?;
+    let client: ChatGPT = ChatGPT::new(config.api_key().expect("no API key"))?;
     let mut conversation: Conversation = Conversation::new_with_history(client, vec![]);
 
     // Render loop
@@ -110,21 +109,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             // Display message history
             // TODO: make user messages italic and assistant messages regular
-            // FIXME: wrap messages
-            let messages: Vec<ListItem> = app_state.history().iter()
-                .map(|msg| {
-                    ListItem::new(msg.as_str())
-                })
-                .collect();
-            let history_box = List::new(messages)
-                .block(Block::default().title("History").borders(Borders::ALL))
-                .style(Style::default().fg(Color::White))
-                .highlight_style(Style::default().add_modifier(Modifier::ITALIC))
-                .highlight_symbol("> ");
             // TODO: keep history_state in app_state?
-            let mut history_state = ListState::default();
-            history_state.select(app_state.selected_message());
-            f.render_stateful_widget(history_box, layout[0], &mut history_state);
+            let history_box = Paragraph::new(app_state.history()[app_state.selected_message().unwrap_or_default()].clone())
+                .wrap(Wrap{ trim: false })
+                .style(Style::default())
+                .block(Block::default().borders(Borders::ALL).title("History"));
+            f.render_widget(history_box, layout[0]);
 
             // Input and help box, depending on editing mode
             match app_state.editing_mode() {
@@ -244,7 +234,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         // Remove letter under cursor
                         KeyCode::Delete => {
                             app_state.remove_char();
-                        }
+                        },
+                        // Escape to normal mode
                         KeyCode::Esc => {
                             app_state.switch_editing_mode(EditingMode::Normal);
                         },
