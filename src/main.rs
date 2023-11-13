@@ -78,7 +78,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // FOR TESTING PURPOSES
     let client: ChatGPT = ChatGPT::new(config.api_key().expect("no API key"))?;
-    let mut conversation: Conversation = Conversation::new_with_history(client, vec![]);
+    let mut conversation: Conversation = client.new_conversation();
 
     // Render loop
     loop {
@@ -217,8 +217,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             // TODO: queue up the API call to happen on next frame draw, otherwise cannot show loading icon
                             // Generally, how do I properly use async/await? Right now, I'm just blocking the main thread anyway
                             app_state.append_history(String::from(app_state.input_text()));
-                            app_state.clear_input_text();
                             let response = conversation.send_message(app_state.input_text()).await.expect("ChatGPT error");
+                            app_state.clear_input_text();
                             app_state.append_history(response.message().content.clone());
                         }
                         _ => {},
@@ -249,8 +249,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         KeyCode::Enter => {
                             app_state.switch_editing_mode(EditingMode::Normal);
                             app_state.append_history(String::from(app_state.input_text()));
-                            app_state.clear_input_text();
                             let response = conversation.send_message(app_state.input_text()).await.expect("ChatGPT error");
+                            app_state.clear_input_text();
                             app_state.append_history(response.message().content.clone());
                         }
                         _ => {},
