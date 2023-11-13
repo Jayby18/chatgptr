@@ -108,13 +108,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             f.set_cursor(cursor_column + 1, layout[1].y + 1 + cursor_line);
 
             // Display message history
-            // TODO: make user messages italic and assistant messages regular
-            // TODO: keep history_state in app_state?
-            let history_box = Paragraph::new(app_state.history()[app_state.selected_message().unwrap_or_default()].clone())
-                .wrap(Wrap{ trim: false })
-                .style(Style::default())
-                .block(Block::default().borders(Borders::ALL).title("History"));
-            f.render_widget(history_box, layout[0]);
+            if app_state.history().len() > 0 {
+                let history_box = Paragraph::new(app_state.history()[app_state.selected_message().unwrap_or_default()].clone())
+                    .wrap(Wrap{ trim: false })
+                    .style(Style::default())
+                    .block(Block::default().borders(Borders::ALL).title(format!("History ({}/{})", app_state.selected_message().unwrap_or_default() + 1, app_state.history().len())));
+                f.render_widget(history_box, layout[0]);
+            } else {
+                let history_box = Paragraph::new("*no history*")
+                    .wrap(Wrap{ trim: false })
+                    .style(Style::default())
+                    .block(Block::default().borders(Borders::ALL).title("History"));
+                f.render_widget(history_box, layout[0]);
+            }
 
             // Input and help box, depending on editing mode
             match app_state.editing_mode() {
@@ -178,10 +184,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             app_state.remove_char();
                         },
                         // Navigate up/down through history
-                        KeyCode::Char('j') => {
+                        KeyCode::Char('k') => {
                             app_state.select_next_msg();
                         },
-                        KeyCode::Char('k') => {
+                        KeyCode::Char('j') => {
                             app_state.select_prev_msg();
                         },
                         // Navigate cursor left/right
