@@ -46,7 +46,8 @@ impl AppState {
         self.input_text.remove(self.cursor_position as usize);
     }
     pub fn backspace(&mut self) {
-        // TODO: backspace
+        self.move_cursor_left();
+        self.remove_char();
     }
     pub fn set_input_text(&mut self, text: &str) { self.input_text = String::from(text); }
     pub fn clear_input_text(&mut self) {
