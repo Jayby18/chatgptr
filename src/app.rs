@@ -23,7 +23,8 @@ impl AppState {
             editing_mode: EditingMode::Normal,
             input_text: String::new(),
             cursor_position: 0,
-            history: vec![],
+            // history: vec![],
+            history: vec![String::from("Et ut veniam mollit ut velit adipisicing reprehenderit irure exercitation qui exercitation irure incididunt fugiat officia.")],
             selected_message: None,
             yank_buffer: String::new(),
         }
