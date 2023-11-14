@@ -18,7 +18,7 @@ A TUI interface for ChatGPT, written in Rust.
 
 ### Prepackaged binaries
 
-There are prepackaged binaries available to download from the [releases page](/releases), for Linux, MacOS, and Windows.
+There are prepackaged binaries available to download from the [releases page](https://github.com/jadenaccord/chatgptr/releases), for Linux, MacOS, and Windows.
 
 ### Cargo (via crates.io)
 
