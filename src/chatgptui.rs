@@ -8,7 +8,7 @@ use std::{
 use ratatui::{
     widgets::*,
     layout::{Layout, Constraint, Direction},
-    style::{Color, Style, Modifier},
+    style::{Color, Style},
     backend::CrosstermBackend,
     Terminal,
     text::Line,
@@ -18,8 +18,7 @@ use crossterm::{
     terminal::{enable_raw_mode, disable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
     execute,
 };
-use chatgpt::prelude::{ ChatGPT, ChatMessage, Conversation };
-use chatgpt::types::Role;
+use chatgpt::prelude::{ ChatGPT, Conversation };
 
 mod app;
 use app::{AppState, EditingMode};
@@ -31,7 +30,8 @@ enum Event<I> {
     Tick,
 }
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config: Config = Config::load();
     let mut app_state: AppState = AppState::new();
     
@@ -77,9 +77,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     // FOR TESTING PURPOSES
-    let client: ChatGPT = ChatGPT::new(config.api_key().unwrap())?;
-    let history: Vec<ChatMessage> = vec![ChatMessage{role: Role::User, content: String::from("What is Rust?")}, ChatMessage{role: Role::Assistant, content: String::from("Rust is a programming language")}];
-    let conversation: Conversation = Conversation::new_with_history(client, history);
+    let client: ChatGPT = ChatGPT::new(config.api_key().expect("no API key"))?;
+    let mut conversation: Conversation = client.new_conversation();
 
     // Render loop
     loop {
@@ -109,22 +108,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             f.set_cursor(cursor_column + 1, layout[1].y + 1 + cursor_line);
 
             // Display message history
-            // TODO: make user messages italic and assistant messages regular
-            // FIXME: wrap messages
-            let messages: Vec<ListItem> = app_state.history().iter()
-                .map(|msg| {
-                    ListItem::new(msg.as_str())
-                })
-                .collect();
-            let history_box = List::new(messages)
-                .block(Block::default().title("History").borders(Borders::ALL))
-                .style(Style::default().fg(Color::White))
-                .highlight_style(Style::default().add_modifier(Modifier::ITALIC))
-                .highlight_symbol("> ");
-            // TODO: keep history_state in app_state?
-            let mut history_state = ListState::default();
-            history_state.select(app_state.selected_message());
-            f.render_stateful_widget(history_box, layout[0], &mut history_state);
+            if app_state.history().len() > 0 {
+                let history_box = Paragraph::new(app_state.history()[app_state.selected_message().unwrap_or_default()].clone())
+                    .wrap(Wrap{ trim: false })
+                    .style(Style::default())
+                    .block(Block::default().borders(Borders::ALL).title(format!("History ({}/{})", app_state.selected_message().unwrap_or_default() + 1, app_state.history().len())));
+                f.render_widget(history_box, layout[0]);
+            } else {
+                let history_box = Paragraph::new("*no history*")
+                    .wrap(Wrap{ trim: false })
+                    .style(Style::default())
+                    .block(Block::default().borders(Borders::ALL).title("History"));
+                f.render_widget(history_box, layout[0]);
+            }
 
             // Input and help box, depending on editing mode
             match app_state.editing_mode() {
@@ -188,10 +184,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             app_state.remove_char();
                         },
                         // Navigate up/down through history
-                        KeyCode::Char('j') => {
+                        KeyCode::Char('k') => {
                             app_state.select_next_msg();
                         },
-                        KeyCode::Char('k') => {
+                        KeyCode::Char('j') => {
                             app_state.select_prev_msg();
                         },
                         // Navigate cursor left/right
@@ -216,6 +212,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         KeyCode::Esc => {
                             app_state.clear_msg_selection();
                         },
+                        // TODO: Send message
+                        KeyCode::Enter => {
+                            // TODO: queue up the API call to happen on next frame draw, otherwise cannot show loading icon
+                            // Generally, how do I properly use async/await? Right now, I'm just blocking the main thread anyway
+                            app_state.append_history(String::from(app_state.input_text()));
+                            let response = conversation.send_message(app_state.input_text()).await.expect("ChatGPT error");
+                            app_state.clear_input_text();
+                            app_state.append_history(response.message().content.clone());
+                        }
                         _ => {},
                     },
                     Event::Tick => {},
@@ -235,12 +240,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         // Remove letter under cursor
                         KeyCode::Delete => {
                             app_state.remove_char();
-                        }
+                        },
+                        // Escape to normal mode
                         KeyCode::Esc => {
                             app_state.switch_editing_mode(EditingMode::Normal);
                         },
                         // TODO: Send message
                         KeyCode::Enter => {
+                            app_state.switch_editing_mode(EditingMode::Normal);
+                            app_state.append_history(String::from(app_state.input_text()));
+                            let response = conversation.send_message(app_state.input_text()).await.expect("ChatGPT error");
+                            app_state.clear_input_text();
+                            app_state.append_history(response.message().content.clone());
                         }
                         _ => {},
                     },
