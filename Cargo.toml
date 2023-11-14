@@ -14,7 +14,9 @@ chatgpt_rs = "1.2.3"
 crossterm = "0.27.0"
 dirs = "5.0.1"
 ratatui = "0.23.0"
+reqwest = { version = "0.11.22", features = ["blocking"] }
 serde = { version = "1.0.190", features = ["derive"] }
+serde_json = "1.0.108"
 tokio = { version = "1.33.0", features = ["full"] }
 toml = "0.8.2"
 xdg = "2.5.2"
