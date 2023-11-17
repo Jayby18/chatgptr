@@ -81,6 +81,6 @@ fn ask(question: &str, config: &Config) {
         .send();
 
     // Parse response to CompletionResponse struct
-    let result: CompletionResponse = serde_json::from_str(res.unwrap().text().unwrap().as_str()).unwrap();
+    let result: CompletionResponse = serde_json::from_str(res.expect("chatgpt api error").text().expect("no text on response").as_str()).expect("could not parse response");
     println!("{} ({} tokens)", result.choices[0].message.content, result.usage.total_tokens);
 }
